@@ -55,7 +55,9 @@
   </div>
 
   <script>
-    const API_URL = 'https://online-note-app.onrender.com';
+    const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      ? `${window.location.origin}/api`
+      : 'https://online-note-app.onrender.com/api';
     let token = localStorage.getItem('token');
     let isRegisterMode = false;
     let selectedColor = '#ffffff';

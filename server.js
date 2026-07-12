@@ -1,4 +1,5 @@
 require('dotenv').config();
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -12,7 +13,11 @@ connectDB();
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public')); // Serves frontend from a 'public' folder
+app.use(express.static(__dirname));
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 // --- AUTH ROUTES ---
 // --- UPDATED AUTH ROUTES ---
