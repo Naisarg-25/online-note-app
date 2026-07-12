@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Secure Notes App</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans">
+
+  <div id="auth-container" class="flex items-center justify-center min-h-screen">
+    <div class="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
+      <h2 id="auth-title" class="text-2xl font-bold mb-6 text-slate-800">Login</h2>
+      <form id="auth-form" class="space-y-4">
+        <input type="email" id="auth-email" placeholder="Email Address" required class="w-full p-2 border border-slate-300 rounded focus:outline-sky-500">
+        <input type="password" id="auth-password" placeholder="Password" required class="w-full p-2 border border-slate-300 rounded focus:outline-sky-500">
+        <button type="submit" class="w-full bg-sky-600 text-white py-2 rounded font-semibold hover:bg-sky-700">Submit</button>
+      </form>
+      <button id="toggle-auth" class="mt-4 text-sm text-sky-600 hover:underline w-full text-center">Don't have an account? Register</button>
+    </div>
+  </div>
+
+  <div id="app-container" class="hidden">
+    <nav class="bg-white shadow-sm px-6 py-4 flex justify-between items-center">
+      <h1 class="text-xl font-bold text-slate-800">📌 SecureNotes</h1>
+      <div class="flex items-center gap-4">
+        <input type="text" id="search-bar" placeholder="Search notes..." class="px-3 py-1.5 border border-slate-300 rounded-lg w-64 focus:outline-sky-500">
+        <button id="logout-btn" class="bg-slate-200 text-slate-700 px-4 py-1.5 rounded-lg hover:bg-slate-300">Logout</button>
+      </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto p-6">
+      <form id="note-form" class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 max-w-xl mx-auto mb-8 space-y-3">
+        <input type="hidden" id="note-id">
+        <div class="flex justify-between items-center">
+          <input type="text" id="note-title" placeholder="Title" required class="w-full font-semibold text-lg focus:outline-none">
+          <button type="button" id="pin-btn" class="text-slate-400 hover:text-amber-500 text-xl">📌</button>
+        </div>
+        <textarea id="note-content" placeholder="Take a note..." rows="3" required class="w-full resize-none focus:outline-none text-slate-600"></textarea>
+        
+        <div class="flex justify-between items-center pt-2 border-t border-slate-100">
+          <div class="flex gap-1">
+            <button type="button" class="color-opt w-6 h-6 rounded-full border border-slate-300 bg-white" data-color="#ffffff"></button>
+            <button type="button" class="color-opt w-6 h-6 rounded-full bg-amber-100" data-color="#fef3c7"></button>
+            <button type="button" class="color-opt w-6 h-6 rounded-full bg-emerald-100" data-color="#d1fae5"></button>
+            <button type="button" class="color-opt w-6 h-6 rounded-full bg-sky-100" data-color="#e0f2fe"></button>
+            <button type="button" class="color-opt w-6 h-6 rounded-full bg-rose-100" data-color="#ffe4e6"></button>
+          </div>
+          <button type="submit" id="save-btn" class="bg-sky-600 text-white px-4 py-1.5 rounded-lg font-medium hover:bg-sky-700">Save</button>
+        </div>
+      </form>
+
+      <div id="notes-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6"></div>
+    </main>
+  </div>
+
+  <script>
+    const API_URL = 'https://online-note-app.onrender.com';
+    let token = localStorage.getItem('token');
+    let isRegisterMode = false;
+    let selectedColor = '#ffffff';
+    let isPinnedState = false;
+
+    const authContainer = document.getElementById('auth-container');
+    const appContainer = document.getElementById('app-container');
+    const authForm = document.getElementById('auth-form');
+    const authTitle = document.getElementById('auth-title');
+    const toggleAuth = document.getElementById('toggle-auth');
+    const notesGrid = document.getElementById('notes-grid');
+    const noteForm = document.getElementById('note-form');
+    const searchBar = document.getElementById('search-bar');
+    const pinBtn = document.getElementById('pin-btn');
+
+    pinBtn.addEventListener('click', () => {
+      isPinnedState = !isPinnedState;
+      pinBtn.classList.toggle('text-amber-500', isPinnedState);
+      pinBtn.classList.toggle('text-slate-400', !isPinnedState);
+    });
+
+    document.querySelectorAll('.color-opt').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedColor = btn.dataset.color;
+        noteForm.style.backgroundColor = selectedColor;
+      });
+    });
+
+    function checkAuth() {
+      if (token) {
+        authContainer.classList.add('hidden');
+        appContainer.classList.remove('hidden');
+        fetchNotes();
+      } else {
+        authContainer.classList.remove('hidden');
+        appContainer.classList.add('hidden');
+      }
+    }
+
+    toggleAuth.addEventListener('click', () => {
+      isRegisterMode = !isRegisterMode;
+      authTitle.innerText = isRegisterMode ? 'Register' : 'Login';
+      toggleAuth.innerText = isRegisterMode ? 'Already have an account? Login' : "Don't have an account? Register";
+    });
+
+    // Handle Authentication updated for email/password
+    authForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const endpoint = isRegisterMode ? '/auth/register' : '/auth/login';
+      const emailValue = document.getElementById('auth-email').value;
+      const passwordValue = document.getElementById('auth-password').value;
+
+      try {
+        const response = await fetch(`${API_URL}${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: emailValue, password: passwordValue })
+        });
+        const data = await response.json();
+        
+        if (response.ok && data.token) {
+          token = data.token;
+          localStorage.setItem('token', token);
+          checkAuth();
+        } else {
+          alert(data.message || 'Authentication failed. Please verify your credentials.');
+        }
+      } catch (err) {
+        alert('Could not connect to server. Ensure your backend application is actively running.');
+      }
+    });
+
+    document.getElementById('logout-btn').addEventListener('click', () => {
+      localStorage.removeItem('token');
+      token = null;
+      checkAuth();
+    });
+
+    async function fetchNotes(searchQuery = '') {
+      const response = await fetch(`${API_URL}/notes?search=${searchQuery}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const notes = await response.json();
+      renderNotes(notes);
+    }
+
+    function renderNotes(notes) {
+      notesGrid.innerHTML = '';
+      notes.forEach(note => {
+        const div = document.createElement('div');
+        div.style.backgroundColor = note.color;
+        div.className = `p-5 rounded-xl border border-slate-200 shadow-xs relative group flex flex-col justify-between transition-all hover:shadow-md`;
+        div.innerHTML = `
+          <div>
+            <div class="flex justify-between items-start mb-2">
+              <h3 class="font-bold text-slate-800 text-lg">${note.title}</h3>
+              <span class="${note.isPinned ? 'text-amber-500' : 'text-slate-300'} text-lg">📌</span>
+            </div>
+            <p class="text-slate-600 whitespace-pre-wrap text-sm">${note.content}</p>
+          </div>
+          <div class="flex justify-end gap-3 mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onclick="editNote('${note._id}', '${escape(note.title)}', '${escape(note.content)}', '${note.color}', ${note.isPinned})" class="text-sky-600 hover:underline text-xs font-medium">Edit</button>
+            <button onclick="deleteNote('${note._id}')" class="text-rose-600 hover:underline text-xs font-medium">Delete</button>
+          </div>
+        `;
+        notesGrid.appendChild(div);
+      });
+    }
+
+    noteForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('note-id').value;
+      const payload = {
+        title: document.getElementById('note-title').value,
+        content: document.getElementById('note-content').value,
+        color: selectedColor,
+        isPinned: isPinnedState
+      };
+
+      const url = id ? `${API_URL}/notes/${id}` : `${API_URL}/notes`;
+      const method = id ? 'PUT' : 'POST';
+
+      await fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(payload)
+      });
+
+      noteForm.reset();
+      document.getElementById('note-id').value = '';
+      noteForm.style.backgroundColor = '#ffffff';
+      isPinnedState = false;
+      pinBtn.classList.replace('text-amber-500', 'text-slate-400');
+      fetchNotes();
+    });
+
+    window.editNote = (id, title, content, color, isPinned) => {
+      document.getElementById('note-id').value = id;
+      document.getElementById('note-title').value = unescape(title);
+      document.getElementById('note-content').value = unescape(content);
+      selectedColor = color;
+      noteForm.style.backgroundColor = color;
+      isPinnedState = isPinned;
+      pinBtn.classList.toggle('text-amber-500', isPinned);
+      pinBtn.classList.toggle('text-slate-400', !isPinned);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.deleteNote = async (id) => {
+      if (confirm('Delete this note permanently?')) {
+        await fetch(`${API_URL}/notes/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        fetchNotes();
+      }
+    };
+
+    searchBar.addEventListener('input', (e) => {
+      fetchNotes(e.target.value);
+    });
+
+    checkAuth();
+  </script>
+</body>
+</html>
